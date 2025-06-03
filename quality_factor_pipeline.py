@@ -219,13 +219,27 @@ class EnhancedBloombergExtractor(DataExtractor):
             for ticker_batch in ticker_batches:
                 for field_batch in field_batches:
                     field_batch_dict = dict(field_batch)
-                    futures.append(executor.submit(self._extract_batch, ticker_batch, field_batch_dict, start_date, end_date, frequency))
+                    futures.append(
+                        executor.submit(
+                            self._extract_batch,
+                            ticker_batch,
+                            field_batch_dict,
+                            start_date,
+                            end_date,
+                            frequency,
+                        )
+                    )
             for future in as_completed(futures):
                 try:
                     batch_data = future.result()
                     for field_name, data in batch_data.items():
                         if not data.empty:
-                            extracted_data[field_name] = pd.concat([extracted_data[field_name], data], axis=1)
+                            cleaned = self.validator.clean_dataframe(data)
+                            validation = self.validator.validate_dataframe(cleaned, field_name)
+                            self._log_extraction(field_name, validation)
+                            extracted_data[field_name] = pd.concat(
+                                [extracted_data[field_name], cleaned], axis=1
+                            )
                 except Exception as e:
                     logging.error(f"Failed to extract batch: {str(e)}")
         return extracted_data
